@@ -1,0 +1,7 @@
+{
+  "name": "youtrack-auto-scheduling",
+  "version": "1.0.0",
+  "dependencies": {
+    "@jetbrains/youtrack-scripting-api": "^2022.1.46592"
+  }
+}
