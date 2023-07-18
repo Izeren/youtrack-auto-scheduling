@@ -77,7 +77,7 @@ exports.rule = entities.Issue.onChange({
             }
 
             for (const slot of day.slots) {
-                if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(slot.start_time) || !/^([01]\d|2[0-3]):([0-5]\d)$/.test(slot.end_time)) {
+                if (!/^([01]\\d|2[0-3]):([0-5]\\d)$/.test(slot.start_time) || !/^([01]\\d|2[0-3]):([0-5]\\d)$/.test(slot.end_time)) {
                     issue.addComment('Invalid schedule format. "start_time" and "end_time" must be in HH:MM format.', ctx.currentUser);
                     return;
                 }
@@ -86,8 +86,16 @@ exports.rule = entities.Issue.onChange({
             // Validate that the slots do not overlap
             const sortedSlots = day.slots.sort((a, b) => a.start_time.localeCompare(b.start_time));
             for (let i = 1; i < sortedSlots.length; i++) {
-                if (sortedSlots[i].start_time < sortedSlots[i - 1].end_time) {
-                    issue.addComment('Invalid schedule format. Slots within the same day cannot overlap.', ctx.currentUser);
+                const currentSlotEnd = sortedSlots[i - 1].end_time;
+                const nextSlotStart = sortedSlots[i].start_time;
+
+                const slotDuration = calculateDuration(sortedSlots[i - 1]);
+                const breakDuration = calculateBreakTime(slotDuration);
+
+                const nextAllowedStart = addMinutes(currentSlotEnd, breakDuration);
+
+                if (nextSlotStart < nextAllowedStart) {
+                    issue.addComment(`Invalid schedule format. There must be a ${breakDuration} minute break after a ${slotDuration} minute slot.`, ctx.currentUser);
                     return;
                 }
             }
@@ -95,6 +103,37 @@ exports.rule = entities.Issue.onChange({
         issue.addComment('Schedule is valid, rescheduling tasks with new schedule', ctx.currentUser);
     }
 });
+
+function calculateDuration(slot) {
+    const [startHours, startMinutes] = slot.start_time.split(":").map(Number);
+    const [endHours, endMinutes] = slot.end_time.split(":").map(Number);
+
+    const startInMinutes = startHours * 60 + startMinutes;
+    const endInMinutes = endHours * 60 + endMinutes;
+
+    return endInMinutes - startInMinutes;
+}
+
+function calculateBreakTime(slotDuration) {
+    if (slotDuration <= 15) {
+        return 5;
+    } else if (slotDuration <= 40) {
+        return 10;
+    } else {
+        return 20;
+    }
+}
+
+function addMinutes(time, minutesToAdd) {
+    const [hours, minutes] = time.split(":").map(Number);
+
+    const totalMinutes = hours * 60 + minutes + minutesToAdd;
+
+    const newHours = Math.floor(totalMinutes / 60);
+    const newMinutes = totalMinutes % 60;
+
+    return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+}
 
 function Logger(useDebug = true) {
     return {

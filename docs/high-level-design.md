@@ -7,12 +7,12 @@ Purpose of this feature is to provide reasonable automation for planning stories
 1. Each story task should have an estimate of total time.
 2. Subtasks should be created dynamically for each story, based on an on-demand event or a regular time trigger. The number of subtasks created should cover the next 2-4 weeks.
 3. Subtasks should be automatically scheduled within a certain time frame based on the schedule associated with their parent story.
-4. The schedule for each task could be stored in a separate label story that contains metadata in cron format in the description.
+4. The schedule for each task should be stored in a separate label story that contains metadata in JSON format in the description.
 5. The scheduler should take into account the priority of the story. For stories with the same priority, sorting should be done by name to make the process deterministic.
-6. The scheduler should be able to split the story into chunks of a minimum size defined by labels.
-7. If a task is not completed as per schedule, a comment should be logged in the story and the subtask should be deleted.
-8. If the schedule or the minimum chunk size is updated, all existing subtasks for that story should be deleted and new subtasks should be created according to the updated parameters.
-9. The total time for all subtasks should not exceed the remaining time for the parent story. Once the total completed time for a story reaches its total estimated time, the story should be marked as complete and removed from the schedule.
+6. The scheduler should split the story into chunks of a size that would fill the entire slot. The greedy algorithm should be used to fill in all the slots until either all slots are filled or the estimated total time for the story has been allocated to subtasks.
+7. If a task is not completed as per schedule, a comment should be logged in the story and the subtask should be deleted. If a task has been marked as completed (possibly even before the scheduled end), the time of closure is irrelevant and the task automatically gets execution time logged that matches the estimated time.
+8. If the schedule or the size of the chunks (which should be a size that would fill the entire slot) is updated, all existing subtasks for that story should be deleted and new subtasks should be created according to the updated parameters.
+9. The total time for all subtasks should not exceed the remaining time for the parent story. Once the total completed time for a story reaches its total estimated time, the story should be marked as complete and removed from the schedule. It is acceptable if overall estimates are slightly impacted. If a subtask takes longer than expected, it shouldn't impact the overall estimate of the story in most cases
 
 
 ## Following design will cover the following components of solution:
@@ -22,7 +22,7 @@ Purpose of this feature is to provide reasonable automation for planning stories
 
 ### Schedules management:
 
-Each schedule should have unique label mapped 1 to 1. To store metadata for schedule, special task is to be created. This task has generic "schedule" label and "custom_schedule" label. This way it is easy to find and manage all schedule tasks by generic label. And 1 to 1 mapping is maintained. Each schedule task has mapping {'Mon': "12:00-13:00,18:00-17:30", 'Tue':...} as the first line, describing time slots over the week (no bi-weekly schedule at this point, for recurring task, creation can be automated with separate rule). Other lines of description can contain user comments for this schedule. All stories marked as general schedule should be validated on save:
+Each schedule should be associated with a unique label. The schedule should be described in a JSON format mapping days of the week to time slots. To store metadata for schedule, a special task should be created. This task has a generic "schedule" label and a "custom_schedule" label. This way it is easy to find and manage all schedule tasks by generic label. And 1 to 1 mapping is maintained. Each schedule task has mapping {'Mon': "12:00-13:00,18:00-17:30", 'Tue':...} as the first line, describing time slots over the week (no bi-weekly schedule at this point, for recurring task, creation can be automated with separate rule). Other lines of description can contain user comments for this schedule. All stories marked as general schedule should be validated on save:
 
 JSON example of time schedule:
 ``` 
@@ -56,12 +56,19 @@ There are following triggers considered:
 
 To simplify explanation of use cases below, please check these workflow step references:
 
+`validate schedule`: this workflow is responsible to verify that updated schedule follows rules listed below
+* slots shouldn't overlap
+* each slot can't be longer than 1h30m
+* there should be at least 5 min break after slots with duration <= 15m
+* there should be at least 10 min break after slots with duration (15m-40m]
+* there should be at least 20 min break after slots with duration (40m-1h30]
+
 `story reschedule`: common list of steps to recreate subtasks and reallocate slots for particular story
 * Delete all open subtasks related to story
 * analyse time left before completion
-* timeslots are parsed from associated schedule
+* timeslots are parsed from the associated schedule which should be in JSON format
 * subtasks created for timeslots with greedy algorithm that follows rules
-  * Each subtask should be not less than min chunk (defined by dedicated label)
+  * Each subtask should be created of a size that would fill the entire slot. The greedy algorithm should be used to fill all the slots until either all slots are filled or the estimated total time for the story has been allocated to subtasks.
   * Each subtask should be not more than 1h30m without breaks (such big tasks require at least 20min break)
   * Each subtask planned for a certain slot should have start time and due time
 * If no subtasks can be scheduled than failure should be logged on main story with details
@@ -102,7 +109,7 @@ Resulting Changes:
 * `custom_schedule refresh`
 
 #### manual workflow trigger
-Trigger: event
+Trigger: even~~~~t
 
 Blast Radius: all stories with the auto-schedule label
 
@@ -135,14 +142,15 @@ Resulting Changes:
 
 ## Appendix
 
-### Further points to consider
+### Points to consider
 
 A few further points to consider:
 
-1. Scheduling Algorithm: The document doesn't detail how the scheduling algorithm will work. Specifically, how does it decide where to place each subtask within the available time slots? Is it a simple first-fit algorithm, or does it take other factors into consideration? 
-2. Edge Cases: Consider what happens when a task is completed earlier than expected, or if a task is deleted. Should the scheduler try to move up subsequent tasks, or leave the schedule as is? What if a task is added that has a higher priority than existing tasks? 
-3. Performance: Depending on the number of tasks and the complexity of the schedules, the scheduling process could potentially be quite slow. It might be worth considering how the system could be optimized for performance, or how it could provide feedback to the user if scheduling is taking a long time. 
-4. User Experience: Consider how the system will provide feedback to the user. For example, if a schedule is invalid or if tasks can't be scheduled, how will the user be notified? How can the user easily see which tasks are scheduled for each day?
+1. If a task is completed earlier than expected, the time of closure is irrelevant and the task automatically gets execution time logged that matches the estimated time. If there was logged execution time before closure, then this time should be respected.
+2. The system is mainly used for planning tasks outside typical working hours, such as mornings, evenings, and weekends. If certain days can't be scheduled due to holidays or other conflicting assignments, the standard approach with rescheduling should apply.
+3. Priorities for the stories are defined by the priority field on the story. The scheduler should consider the priority of the story while scheduling the tasks.
+4. Breaks should be scheduled between tasks, with the length of the break dependent on the duration of the previous task.
+5. In case of failed validation, the 'custom_schedule' label should be removed from the task, and the task should be commented or marked as failed validation.
 
 ### Rough taskification
 
