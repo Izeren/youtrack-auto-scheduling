@@ -58,53 +58,10 @@ exports.rule = entities.Issue.onChange({
 
         try {
             schedule = JSON.parse(issue.description);
+            validateScheduleList(schedule.schedule);
         } catch (e) {
-            issue.addComment('Invalid schedule format. Please provide a valid JSON object.', ctx.currentUser);
+            issue.addComment(e.message, ctx.currentUser);
             return;
-        }
-
-        // Validate the schedule format
-        if (!Array.isArray(schedule.schedule)) {
-            issue.addComment('Invalid schedule format. The "schedule" property must be an array.', ctx.currentUser);
-            return;
-        }
-
-        for (const day of schedule.schedule) {
-            if (!Array.isArray(day.days) || !Array.isArray(day.slots)) {
-                issue.addComment('Invalid schedule format. Each day must include "days" and "slots".', ctx.currentUser);
-                return;
-            }
-
-            for (const slot of day.slots) {
-                if (!/^([01]\\d|2[0-3]):([0-5]\\d)$/.test(slot.start_time) || !/^([01]\\d|2[0-3]):([0-5]\\d)$/.test(slot.end_time)) {
-                    issue.addComment('Invalid schedule format. "start_time" and "end_time" must be in HH:MM format.', ctx.currentUser);
-                    return;
-                }
-
-                // Validate that the slot is not longer than 90 minutes
-                const slotDuration = calculateDuration(slot);
-                if (slotDuration > 90) {
-                    issue.addComment('Invalid schedule format. Each slot cannot be longer than 90 minutes.', ctx.currentUser);
-                    return;
-                }
-            }
-
-            // Validate that the slots do not overlap
-            const sortedSlots = day.slots.sort((a, b) => a.start_time.localeCompare(b.start_time));
-            for (let i = 1; i < sortedSlots.length; i++) {
-                const currentSlotEnd = sortedSlots[i - 1].end_time;
-                const nextSlotStart = sortedSlots[i].start_time;
-
-                const slotDuration = calculateDuration(sortedSlots[i - 1]);
-                const breakDuration = calculateBreakTime(slotDuration);
-
-                const nextAllowedStart = addMinutes(currentSlotEnd, breakDuration);
-
-                if (nextSlotStart < nextAllowedStart) {
-                    issue.addComment(`Invalid schedule format. There must be a ${breakDuration} minute break after a ${slotDuration} minute slot.`, ctx.currentUser);
-                    return;
-                }
-            }
         }
         issue.addComment('Schedule is valid, rescheduling tasks with new schedule', ctx.currentUser);
     }
@@ -139,6 +96,48 @@ function addMinutes(time, minutesToAdd) {
     const newMinutes = totalMinutes % 60;
 
     return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+}
+
+
+function validateScheduleSlots(slots) {
+    for (const slot of slots) {
+        if (!/([0-1][0-9]|2[0-3]):([0-5][0-9])/.test(slot.start_time) || !/([0-1][0-9]|2[0-3]):([0-5][0-9])/.test(slot.end_time)) {
+            throw new Error('Invalid schedule format. "start_time" and "end_time" must be in HH:MM format.');
+        }
+
+        // Validate that the slot is not longer than 90 minutes
+        const slotDuration = calculateDuration(slot);
+        if (slotDuration > 90) {
+            throw new Error('Invalid schedule format. Each slot cannot be longer than 90 minutes.');
+        }
+    }
+
+    // Validate that the slots do not overlap
+    const sortedSlots = slots.sort((a, b) => a.start_time.localeCompare(b.start_time));
+    for (let i = 1; i < sortedSlots.length; i++) {
+        const currentSlotEnd = sortedSlots[i - 1].end_time;
+        const nextSlotStart = sortedSlots[i].start_time;
+
+        const slotDuration = calculateDuration(sortedSlots[i - 1]);
+        const breakDuration = calculateBreakTime(slotDuration);
+
+        const nextAllowedStart = addMinutes(currentSlotEnd, breakDuration);
+
+        if (nextSlotStart < nextAllowedStart) {
+            throw new Error(`Invalid schedule format. There must be a ${breakDuration} minute break after a ${slotDuration} minute slot.`);
+        }
+    }
+    return true;
+}
+
+function validateScheduleList(scheduleList) {
+    if (!Array.isArray(scheduleList)) {
+        throw new Error('Invalid schedule format. The "schedule" property must be an array.');
+    }
+    for (const schedule of scheduleList) {
+        validateScheduleSlots(schedule.slots);
+    }
+    return true;
 }
 
 function Logger(useDebug = true) {
