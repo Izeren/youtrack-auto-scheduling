@@ -55,7 +55,6 @@ exports.rule = entities.Issue.onChange({
         const logger = new Logger(ctx.traceEnabled);
 
         let schedule;
-        // issue_3.addComment(string_1, user_1);
 
         try {
             schedule = JSON.parse(issue.description);
@@ -79,6 +78,13 @@ exports.rule = entities.Issue.onChange({
             for (const slot of day.slots) {
                 if (!/^([01]\\d|2[0-3]):([0-5]\\d)$/.test(slot.start_time) || !/^([01]\\d|2[0-3]):([0-5]\\d)$/.test(slot.end_time)) {
                     issue.addComment('Invalid schedule format. "start_time" and "end_time" must be in HH:MM format.', ctx.currentUser);
+                    return;
+                }
+
+                // Validate that the slot is not longer than 90 minutes
+                const slotDuration = calculateDuration(slot);
+                if (slotDuration > 90) {
+                    issue.addComment('Invalid schedule format. Each slot cannot be longer than 90 minutes.', ctx.currentUser);
                     return;
                 }
             }
