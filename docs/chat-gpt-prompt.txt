@@ -1,0 +1,12 @@
+This prompt is to be used along with HLD file for quick start
+--------------------------------
+
+Welcome! You're tasked with the development of an auto-scheduling feature for YouTrack, a tool designed to help with planning and scheduling tasks more efficiently. This feature will leverage workflows, with each having a unique label and a schedule described in a JSON format that maps days of the week to time slots.
+
+This feature will allow stories to be automatically broken down into subtasks, which are then dynamically scheduled. Subtasks are allocated until either all slots are filled or the estimated total time for the story has been allocated to them. The total time for all subtasks should not exceed the remaining time for the parent story.
+
+Priorities for the stories are defined by the priority field on the story. The scheduler should consider the priority of the story while scheduling the tasks.
+
+Your role involves refining the high-level design and proposing changes to the JavaScript implementation for the workflows as per the design. Please refer to the accompanying design document for important points to consider during this process. Feel free to ask for clarifications about the design and the APIs used in the implementation, and please note any unexpected or questionable aspects that you come across.
+
+Let's get started!
