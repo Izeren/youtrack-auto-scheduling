@@ -4,9 +4,7 @@ let workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 
 /**
  * A sample workflow that is triggered by update on issue with 'schedule' tag
- * To prevent unintentional triggers this workflow only triggered when issue has
- * tag: 'pending_update', this is to make schedule updates transactional.
- * This workflow removes tag `pending_update`.
+ * This workflow is triggered when description of schedule task is changed.
  * For tasks with 'schedule' tag mandatory validation is performed by this workflow
  * Validation steps are the following:
  *
@@ -25,14 +23,13 @@ exports.rule = entities.Issue.onChange({
         logger.log("Running scripts for the \"Issue has tag\" block");
         const schedule_story = ctx.issue;
         const schedule_tag = `schedule`;
-        const update_tag= `pending_update`;
 
         const IssuehasTagsFn_0 = () => {
             if (schedule_story === null || schedule_story === undefined) throw new Error('Block #1 (Issue has tag): "Issue" has no value');
             if (schedule_tag === null || schedule_tag === undefined) throw new Error('Block #1 (Issue has tag): "Tag" has no value');
-            if (update_tag === null || update_tag === undefined) throw new Error('Block #1 (Issue has tag): "Tag" has no value');
 
-            return schedule_story.hasTag(schedule_tag) && schedule_story.hasTag(update_tag);
+            return schedule_story.hasTag(schedule_tag)
+                && schedule_story.isChanged("description");
         };
 
         try {
@@ -50,8 +47,6 @@ exports.rule = entities.Issue.onChange({
     },
     action: function(ctx) {
         let issue = ctx.issue;
-        const update_tag= `pending_update`;
-        issue.removeTag(update_tag);
         const logger = new Logger(ctx.traceEnabled);
 
         let schedule;
