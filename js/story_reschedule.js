@@ -185,24 +185,18 @@ function createSubtasks(ctx, issue, slots) {
         let subtaskEffort = Math.min(slot.length, effortToSchedule);
 
         // Create a new subtask
-        const newIssue = new entities.Issue(ctx.currentUser, issue.project, 'Subtask for slot ' + formatDateTime(slot.start_time) + ' - ' + formatDateTime(slot.end_time));
+        const newIssue = new entities.Issue(ctx.currentUser, issue.project, '[Partial]: ' + issue.summary);
 
         // newIssue.fields.Type = ctx.TypeEnum.Task;
         newIssue.links['subtask of'].add(issue);
         newIssue.fields.Estimate = dateTime.toPeriod(subtaskEffort * 60 * 1000);  // Convert minutes to milliseconds
+        newIssue.fields['Due date'] = Date.now();
+        newIssue.fields['Start date'] = slot.start_time;
+        newIssue.addComment(
+            'Subtask created for start time: ' + slot.start_time + ' and end time: ' + slot.end_time,
+            ctx.currentUser);
 
         // Decrease the remaining effort to schedule
         effortToSchedule -= subtaskEffort;
     }
 }
-
-// function applyAddWorkItem(ctx) {
-//     const logger = new Logger(ctx.traceEnabled);
-//     logger.log("Mode: set");
-//     logger.log("Current value:", ctx.issue.fields.Effort);
-//     try {
-//         ctx.issue.applyCommand("add work " + periodToMinutes(ctx.issue.fields.Estimate) + "m", ctx.currentUser);
-//     } catch (e) {
-//         ctx.issue.addComment('Failed to add work item: ' + e, ctx.currentUser);
-//     }
-// }
