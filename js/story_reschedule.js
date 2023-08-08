@@ -48,7 +48,7 @@ exports.rule = entities.Issue.onChange({
             // Replace `getOpenSubtasksWithZeroEffort` and `deleteSubtask` with your actual implementation
             deleteOpenSubtasks(highestPriorityStory);
 
-            let slots = getAvailableSlots(highestPriorityStory, 3); // testing with 3 days
+            let slots = getAvailableSlots(highestPriorityStory, 14); // testing with 2 weeks
             createSubtasks(ctx, highestPriorityStory, slots);
             issue.addComment('Subtasks scheduled', ctx.currentUser);
         } catch (err) {
@@ -140,7 +140,7 @@ function formatDateTime(dateTime) {
 }
 
 function logProposedSlots(ctx, issue) {
-    let slots = getAvailableSlots(issue, 3);  // 4 weeks
+    let slots = getAvailableSlots(issue, 14);  // 2 weeks
 
     // Add a debugging comment with the proposed slots
     let slotsString = slots.map(slot => 'Start: ' + formatDateTime(slot.start_time) + ', End: ' + formatDateTime(slot.end_time) + ', Length: ' + slot.length + ' minutes').join('\n');
@@ -190,11 +190,13 @@ function createSubtasks(ctx, issue, slots) {
         // newIssue.fields.Type = ctx.TypeEnum.Task;
         newIssue.links['subtask of'].add(issue);
         newIssue.fields.Estimate = dateTime.toPeriod(subtaskEffort * 60 * 1000);  // Convert minutes to milliseconds
-        newIssue.fields['Due date'] = Date.now();
-        newIssue.fields['Start date'] = slot.start_time;
+        newIssue.fields['Due date'] = slot.end_time.getTime();
+        newIssue.fields['Start date'] = slot.start_time.getTime();
+        newIssue.fields.Assignee = ctx.currentUser;
         newIssue.addComment(
             'Subtask created for start time: ' + slot.start_time + ' and end time: ' + slot.end_time,
             ctx.currentUser);
+        newIssue.applyCommand('add Board Daily routine')
 
         // Decrease the remaining effort to schedule
         effortToSchedule -= subtaskEffort;
