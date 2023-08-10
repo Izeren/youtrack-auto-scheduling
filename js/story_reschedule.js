@@ -46,11 +46,12 @@ exports.rule = entities.Issue.onChange({
 
             // Delete all open subtasks for this story that have zero logged effort
             // Replace `getOpenSubtasksWithZeroEffort` and `deleteSubtask` with your actual implementation
-            deleteOpenSubtasks(highestPriorityStory);
+            let scheduledSlots = getScheduledSlots(highestPriorityStory);
+            const deletedSubtaskCount = deleteOpenSubtasks(ctx, highestPriorityStory);
 
-            let slots = getAvailableSlots(highestPriorityStory, 14); // testing with 2 weeks
+            let slots = getAvailableSlots(highestPriorityStory, scheduledSlots, 14); // testing with 2 weeks
             createSubtasks(ctx, highestPriorityStory, slots);
-            issue.addComment('Subtasks scheduled', ctx.currentUser);
+            issue.addComment(deletedSubtaskCount + ' due subtasks deleted and ' + slots.length + ' new subtasks scheduled', ctx.currentUser);
         } catch (err) {
             issue.addComment('Failed to create subtasks: ' + err, ctx.currentUser);
         }
@@ -78,20 +79,51 @@ function getHighestPriorityStory(issue) {
     return issue;
 }
 
-function deleteOpenSubtasks(story) {
-    const unresolvedSubtask = story.links['parent for'].forEach(
+function getScheduledSlots(story) {
+    let scheduledSlots = [];
+    story.links['parent for'].forEach(
         function (subtask) {
             if (subtask.isReported && !(subtask.fields.State && subtask.fields.State.isResolved)) {
+                let start_datetime =  new Date(subtask.fields['Start date']);
+                let end_datetime =  new Date(subtask.fields['Due date']);
+                scheduledSlots.push({
+                    start_time: start_datetime,
+                    end_time: end_datetime,
+                    length: (end_datetime.getTime() - start_datetime.getTime()) / 1000 / 60
+                });
+            }
+        }
+    );
+    return scheduledSlots;
+}
+
+function slotIsNotScheduled(slot, scheduledSlots) {
+    return !scheduledSlots.some(
+        function (scheduledSlot) {
+            return scheduledSlot.start_time.getTime() === slot.start_time.getTime()
+                && scheduledSlot.end_time.getTime() === slot.end_time.getTime();
+        }
+    );
+}
+
+function deleteOpenSubtasks(ctx, story) {
+    let deletedSubtaskCount = 0;
+    const unresolvedSubtask = story.links['parent for'].forEach(
+        function (subtask) {
+            if (subtask.isReported && !(subtask.fields.State && subtask.fields.State.isResolved)
+                && subtask.fields['Due date'] && new Date(subtask.fields['Due date']) < new Date()) {
                 subtask.applyCommand('delete');
+                deletedSubtaskCount++;
             }
         }
     );
     if (unresolvedSubtask) {
         throw new Error("Failed to delete open subtasks, please remove them manually");
     }
+    return deletedSubtaskCount;
 }
 
-function getAvailableSlots(story, horizon) {
+function getAvailableSlots(story, scheduledSlots, horizon) {
     // Parse schedule from parent task description
     const parent = story.links['subtask of'].first();
     const schedule = JSON.parse(parent.description).schedule;
@@ -117,12 +149,15 @@ function getAvailableSlots(story, horizon) {
                     const slotEndTime = new Date(time.getFullYear(), time.getMonth(), time.getDate(), endHoursMinutes[0], endHoursMinutes[1]);
 
                     if (slotEndTime > now) {
-                        // Only add slots that are in the future
-                        availableSlots.push({
+                        let proposedSlot = {
                             start_time: slotStartTime,
                             end_time: slotEndTime,
                             length: (slotEndTime.getTime() - slotStartTime.getTime()) / (60 * 1000)  // Length in minutes
-                        });
+                        }
+                        // Only add slots that are in the future not schedule slots if subtask already scheduled
+                        if (slotIsNotScheduled(proposedSlot, scheduledSlots)) {
+                            availableSlots.push(proposedSlot);
+                        }
                     }
                 }
             }
@@ -139,9 +174,7 @@ function formatDateTime(dateTime) {
     return dateTime.toLocaleString();
 }
 
-function logProposedSlots(ctx, issue) {
-    let slots = getAvailableSlots(issue, 14);  // 2 weeks
-
+function logSlots(ctx, issue, slots) {
     // Add a debugging comment with the proposed slots
     let slotsString = slots.map(slot => 'Start: ' + formatDateTime(slot.start_time) + ', End: ' + formatDateTime(slot.end_time) + ', Length: ' + slot.length + ' minutes').join('\n');
     issue.addComment('Proposed slots:\n' + slotsString, ctx.currentUser);
