@@ -19,7 +19,9 @@ exports.rule = entities.Issue.onSchedule({
     action: (ctx) => {
         try {
             ctx.issue.fields.Assignee.notify(`Partial task is due and will be rescheduled: ${ctx.issue.summary}`,
-                `Issue has been planned for time slot: ${new Date(ctx.issue.fields['Start date'])}, ${new Date(ctx.issue.fields['Due date'])}`);
+                `Issue link: https://izeren.youtrack.cloud/issue/${ctx.issue.id}\n
+                Issue has been planned for time slot: ${new Date(ctx.issue.fields['Start date'])}, 
+                ${new Date(ctx.issue.fields['Due date'])}`);
 
             // Send a consolidated email to the assignee of each issue
         } catch (error) {
