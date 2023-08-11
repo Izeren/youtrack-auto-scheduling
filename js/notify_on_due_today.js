@@ -8,7 +8,7 @@ exports.rule = entities.Issue.onSchedule({
     title: 'Notify user about issues that are due today',
     //
     search: '#Unresolved Due date: Today [Partial]',
-    cron: '0 5 * * * ?',
+    cron: '0 0 5 * * ?',
     // We don't want to send any extra notifications  to the user, so we set this to true
     muteUpdateNotifications: true,
     // This workflow doesn't modify any properties, so we set this to false

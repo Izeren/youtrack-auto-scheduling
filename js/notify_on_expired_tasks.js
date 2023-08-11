@@ -8,7 +8,7 @@ exports.rule = entities.Issue.onSchedule({
     title: 'Notify on tasks with expired Due date',
     //
     search: '#Unresolved Due date: 2022-08-13 .. Today [Partial]',
-    cron: '0 22 * * * ?',
+    cron: '0 0 22 * * ?',
     // We don't want to send any extra notifications  to the user, so we set this to true
     muteUpdateNotifications: true,
     // This workflow doesn't modify any properties, so we set this to false
